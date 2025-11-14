@@ -14,6 +14,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://yabadoo.netlify.app'),
   title: "Yaba | Prince of Rhumbacane - Kenyan Rhumba Artist",
   description: "Official website of Yaba, Prince of Rhumbacane. Experience authentic Kenyan Rhumba music. Stream and purchase the new EP WAPE WAPE. Powered by SoldOutAfrica - Africa's leading music distribution platform.",
   keywords: "Yaba, Kenyan Rhumba, African Music, WAPE WAPE, SoldOutAfrica, Music Distribution, Kenyan Artist, Rhumbacane",
@@ -23,7 +24,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/images/logo/SOLDOUT LOGO dark-1.png",
+        url: "/opengraph-image.png",
         width: 1200,
         height: 630,
         alt: "SoldOutAfrica - Yaba Music",
@@ -34,7 +35,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Yaba | Prince of Rhumbacane - Kenyan Rhumba Artist",
     description: "Experience authentic Kenyan Rhumba music. Stream and purchase the new EP WAPE WAPE.",
-    images: ["/images/logo/SOLDOUT LOGO dark-1.png"],
+    images: ["/opengraph-image.png"],
   },
 };
 
