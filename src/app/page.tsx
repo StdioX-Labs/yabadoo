@@ -394,7 +394,7 @@ export default function Home() {
                         </div>
                       </div>
                       <div className="flex items-baseline gap-2 mb-3 sm:mb-4">
-                        <span className="text-4xl sm:text-5xl font-bold text-[#708238]">KES 1,000</span>
+                        <span className="text-4xl sm:text-5xl font-bold text-[#708238]">KES 1,500</span>
                         <span className="text-sm sm:text-base text-[#F0FFF0]/60">/ All 6 tracks</span>
                       </div>
                     </div>

@@ -3,24 +3,18 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-
-type PaymentMethod = 'mpesa' | 'card';
+import Script from 'next/script';
 
 const PRESET_AMOUNTS = [100, 200, 500, 1000, 2000];
 
 export default function CoffeePage() {
-  const [activeTab, setActiveTab] = useState<PaymentMethod>('mpesa');
+  const [isPaystackLoaded, setIsPaystackLoaded] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
   const [selectedPreset, setSelectedPreset] = useState<number | null>(500);
   const [formData, setFormData] = useState({
     email: '',
     firstName: '',
     lastName: '',
-    phone: '',
-    mpesaNumber: '',
-    cardNumber: '',
-    expiryDate: '',
-    cvv: '',
     message: '',
   });
 
@@ -52,12 +46,60 @@ export default function CoffeePage() {
       alert('Minimum amount is KES 50');
       return;
     }
-    console.log('Coffee payment submitted:', { ...formData, amount, paymentMethod: activeTab });
-    alert(`Processing ${activeTab.toUpperCase()} payment of KES ${amount}...\nThank you for supporting Yaba! ☕`);
+
+    if (!isPaystackLoaded) {
+      alert('Payment system is still loading. Please wait a moment.');
+      return;
+    }
+
+    // @ts-ignore - PaystackPop is loaded from script
+    const handler = window.PaystackPop.setup({
+      key: 'pk_live_1edd5134d2a4bafe55af11d29e3184cbcbe49125',
+      email: formData.email,
+      amount: amount * 100, // Amount in kobo (multiply by 100)
+      currency: 'KES',
+      ref: 'COFFEE_' + Math.floor(Math.random() * 1000000000 + 1),
+      metadata: {
+        custom_fields: [
+          {
+            display_name: 'Customer Name',
+            variable_name: 'customer_name',
+            value: `${formData.firstName} ${formData.lastName}`,
+          },
+          {
+            display_name: 'Message',
+            variable_name: 'message',
+            value: formData.message || 'No message',
+          },
+          {
+            display_name: 'Product',
+            variable_name: 'product',
+            value: 'Buy Yaba a Coffee',
+          },
+        ],
+      },
+      onClose: function () {
+        alert('Payment cancelled. You can try again anytime!');
+      },
+      callback: function (response: any) {
+        alert(
+          `Thank you for supporting Yaba! ☕\n\nPayment successful!\nReference: ${response.reference}\nAmount: KES ${amount.toLocaleString()}`
+        );
+        // Here you would typically verify the payment on your backend
+      },
+    });
+
+    handler.openIframe();
   };
 
   return (
-    <div className="min-h-screen bg-[#1A2421] text-[#F0FFF0]">
+    <>
+      <Script 
+        src="https://js.paystack.co/v1/inline.js" 
+        onLoad={() => setIsPaystackLoaded(true)}
+        strategy="afterInteractive"
+      />
+      <div className="min-h-screen bg-[#1A2421] text-[#F0FFF0]">
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-[#1A2421]/90 border-b border-[#708238]/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -242,145 +284,45 @@ export default function CoffeePage() {
                   </div>
                 </div>
 
-                {/* Payment Method Tabs */}
+                {/* Payment Method Info */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4 text-[#708238]">Payment Method</h3>
-
-                  {/* Tab Buttons */}
-                  <div className="flex gap-2 mb-6">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('mpesa')}
-                      className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
-                        activeTab === 'mpesa'
-                          ? 'bg-[#708238] text-[#F0FFF0] shadow-lg shadow-[#708238]/30'
-                          : 'bg-[#1A2421] text-[#F0FFF0]/60 border border-[#708238]/30 hover:border-[#708238]'
-                      }`}
-                    >
-                      <div className="flex items-center justify-center gap-2">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  
+                  <div className="p-4 bg-[#708238]/10 rounded-xl border border-[#708238]/30">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-[#708238]/20 flex items-center justify-center">
+                        <svg className="w-5 h-5 text-[#708238]" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
                         </svg>
-                        M-Pesa
                       </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('card')}
-                      className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
-                        activeTab === 'card'
-                          ? 'bg-[#708238] text-[#F0FFF0] shadow-lg shadow-[#708238]/30'
-                          : 'bg-[#1A2421] text-[#F0FFF0]/60 border border-[#708238]/30 hover:border-[#708238]'
-                      }`}
-                    >
-                      <div className="flex items-center justify-center gap-2">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
-                        </svg>
-                        Card
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-[#F0FFF0] mb-2">Secure Payment via Paystack</h4>
+                        <p className="text-sm text-[#F0FFF0]/80 mb-2">
+                          When you click &quot;Send Coffee&quot;, you&apos;ll be redirected to Paystack&apos;s secure checkout where you can pay with:
+                        </p>
+                        <ul className="text-sm text-[#F0FFF0]/70 space-y-1">
+                          <li className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-[#708238]" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                            </svg>
+                            M-Pesa
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-[#708238]" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                            </svg>
+                            Credit/Debit Card (Visa, Mastercard)
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-[#708238]" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                            </svg>
+                            Bank Transfer
+                          </li>
+                        </ul>
                       </div>
-                    </button>
+                    </div>
                   </div>
-
-                  {/* M-Pesa Form */}
-                  {activeTab === 'mpesa' && (
-                    <div className="space-y-4 animate-fadeIn">
-                      <div className="p-4 bg-[#708238]/10 rounded-xl border border-[#708238]/30 mb-4">
-                        <p className="text-sm text-[#F0FFF0]/80">
-                          <strong>How it works:</strong><br />
-                          1. Enter your M-Pesa number below<br />
-                          2. Click &quot;Send Coffee&quot;<br />
-                          3. You&apos;ll receive an STK push on your phone<br />
-                          4. Enter your M-Pesa PIN to complete payment
-                        </p>
-                      </div>
-
-                      <div>
-                        <label htmlFor="mpesaNumber" className="block text-sm font-medium mb-2">
-                          M-Pesa Phone Number *
-                        </label>
-                        <input
-                          type="tel"
-                          id="mpesaNumber"
-                          name="mpesaNumber"
-                          required={activeTab === 'mpesa'}
-                          value={formData.mpesaNumber}
-                          onChange={handleInputChange}
-                          className="w-full px-4 py-3 bg-[#1A2421] border border-[#708238]/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#708238] focus:border-transparent text-[#F0FFF0] placeholder-[#F0FFF0]/40"
-                          placeholder="254712345678"
-                        />
-                        <p className="text-xs text-[#F0FFF0]/50 mt-1">
-                          Enter number in format: 254XXXXXXXXX
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Card Form */}
-                  {activeTab === 'card' && (
-                    <div className="space-y-4 animate-fadeIn">
-                      <div className="p-4 bg-[#708238]/10 rounded-xl border border-[#708238]/30 mb-4">
-                        <div className="flex items-center gap-2 text-sm text-[#F0FFF0]/80">
-                          <svg className="w-5 h-5 text-[#708238]" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
-                          </svg>
-                          Your payment information is secure and encrypted
-                        </div>
-                      </div>
-
-                      <div>
-                        <label htmlFor="cardNumber" className="block text-sm font-medium mb-2">
-                          Card Number *
-                        </label>
-                        <input
-                          type="text"
-                          id="cardNumber"
-                          name="cardNumber"
-                          required={activeTab === 'card'}
-                          value={formData.cardNumber}
-                          onChange={handleInputChange}
-                          maxLength={19}
-                          className="w-full px-4 py-3 bg-[#1A2421] border border-[#708238]/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#708238] focus:border-transparent text-[#F0FFF0] placeholder-[#F0FFF0]/40"
-                          placeholder="1234 5678 9012 3456"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label htmlFor="expiryDate" className="block text-sm font-medium mb-2">
-                            Expiry Date *
-                          </label>
-                          <input
-                            type="text"
-                            id="expiryDate"
-                            name="expiryDate"
-                            required={activeTab === 'card'}
-                            value={formData.expiryDate}
-                            onChange={handleInputChange}
-                            maxLength={5}
-                            className="w-full px-4 py-3 bg-[#1A2421] border border-[#708238]/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#708238] focus:border-transparent text-[#F0FFF0] placeholder-[#F0FFF0]/40"
-                            placeholder="MM/YY"
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="cvv" className="block text-sm font-medium mb-2">
-                            CVV *
-                          </label>
-                          <input
-                            type="text"
-                            id="cvv"
-                            name="cvv"
-                            required={activeTab === 'card'}
-                            value={formData.cvv}
-                            onChange={handleInputChange}
-                            maxLength={4}
-                            className="w-full px-4 py-3 bg-[#1A2421] border border-[#708238]/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#708238] focus:border-transparent text-[#F0FFF0] placeholder-[#F0FFF0]/40"
-                            placeholder="123"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Submit Button */}
@@ -396,7 +338,7 @@ export default function CoffeePage() {
                 </button>
 
                 <p className="text-xs text-center text-[#F0FFF0]/50">
-                  Thank you for supporting Yaba&apos;s music! 🎵
+                  Secure payment powered by Paystack
                 </p>
               </form>
             </div>
@@ -442,5 +384,6 @@ export default function CoffeePage() {
         </div>
       </footer>
     </div>
+    </>
   );
 }
