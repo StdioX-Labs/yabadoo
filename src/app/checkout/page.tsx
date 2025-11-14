@@ -312,8 +312,17 @@ export default function CheckoutPage() {
 
       {/* Footer */}
       <footer className="border-t border-[#708238]/10 py-8">
-        <div className="max-w-6xl mx-auto px-4 text-center text-[#F0FFF0]/50 text-sm">
-          <p>© 2025 YABA. All rights reserved.</p>
+        <div className="max-w-6xl mx-auto px-4 text-center text-sm">
+          <p className="text-[#F0FFF0]/50 mb-2">© 2025 YABA. All rights reserved.</p>
+          <a
+            href="https://soldoutafrica.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-[#F0FFF0]/60 hover:text-[#708238] transition-colors"
+          >
+            <span className="text-xs">Powered by</span>
+            <span className="font-semibold text-[#708238]">SoldOutAfrica</span>
+          </a>
         </div>
       </footer>
     </div>
