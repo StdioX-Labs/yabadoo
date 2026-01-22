@@ -60,7 +60,7 @@ export default function Home() {
       </div>
 
       {/* Top Right - YABA */}
-      <div className="fixed top-6 md:top-8 right-6 md:right-12 lg:right-16 z-50">
+      <div className="fixed top-6 md:top-8 right-8 md:right-12 lg:right-16 z-50">
         <h2 className="text-[#F0FFF0] font-playfair text-2xl md:text-3xl font-bold tracking-[0.2em]" style={{ writingMode: "vertical-rl" }}>
           YABA
         </h2>
@@ -79,7 +79,7 @@ export default function Home() {
       </div>
 
       {/* Right Side - SHOP (Rotated) */}
-      <div className="fixed bottom-35 right-6 md:right-12 lg:right-16 -translate-y-1/2 z-50">
+      <div className="fixed bottom-35 right-8 md:right-12 lg:right-16 -translate-y-1/2 z-50">
         <Link
           href="/shop"
           className="text-[#F0FFF0] font-playfair text-base md:text-xl tracking-[0.3em] hover:text-[#708238] transition-colors uppercase"
@@ -90,7 +90,7 @@ export default function Home() {
       </div>
 
       {/* Bottom Right - GIFT */}
-      <div className="fixed bottom-20 right-6 md:right-12 lg:right-16 z-50">
+      <div className="fixed bottom-20 right-8 md:right-12 lg:right-16 z-50">
         <Link
           href="/coffee"
           className="text-[#F0FFF0] font-playfair text-base md:text-xl tracking-[0.3em] hover:text-[#708238] transition-colors uppercase"
