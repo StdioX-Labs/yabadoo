@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import Script from 'next/script';
@@ -18,7 +18,7 @@ const EVENT_DATA = {
     currency: 'KES',
 };
 
-export default function EventCheckoutPage() {
+function EventCheckoutContent() {
     const searchParams = useSearchParams();
     const [isPaystackLoaded, setIsPaystackLoaded] = useState(false);
 
@@ -755,5 +755,20 @@ export default function EventCheckoutPage() {
                 </footer>
             </div>
         </>
+    );
+}
+
+export default function EventCheckoutPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-[#0A0F0D] text-white flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-[#708238]" />
+                    <p className="text-white/70">Loading checkout...</p>
+                </div>
+            </div>
+        }>
+            <EventCheckoutContent />
+        </Suspense>
     );
 }

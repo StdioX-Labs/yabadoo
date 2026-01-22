@@ -94,11 +94,11 @@ export default function EventsPage() {
     const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
     const [viewportWidth, setViewportWidth] = useState(0);
 
-    const heroRef = useRef(null);
-    const detailsRef = useRef(null);
-    const descriptionRef = useRef(null);
-    const headerRef = useRef(null);
-    const shareMenuRef = useRef(null);
+    const heroRef = useRef<HTMLElement>(null);
+    const detailsRef = useRef<HTMLElement>(null);
+    const descriptionRef = useRef<HTMLDivElement>(null);
+    const headerRef = useRef<HTMLElement>(null);
+    const shareMenuRef = useRef<HTMLDivElement>(null);
 
     const currency = "KES";
     const ticketPrice = 6500;
