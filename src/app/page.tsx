@@ -126,7 +126,7 @@ export default function Home() {
         {/* Social Icons */}
         <div className="flex items-center justify-center gap-4 md:gap-6">
           <a
-            href="https://tiktok.com/@yabamusic"
+            href="https://www.tiktok.com/@princeofrhumbacane"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[#F0FFF0] hover:text-[#708238] transition-colors"
@@ -136,7 +136,7 @@ export default function Home() {
             </svg>
           </a>
           <a
-            href="https://instagram.com/yabamusic"
+            href="https://www.instagram.com/princeofrhumbacane/"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[#F0FFF0] hover:text-[#708238] transition-colors"
@@ -156,7 +156,7 @@ export default function Home() {
             </svg>
           </a>
           <a
-            href="https://youtube.com/@yabamusic"
+            href="https://www.youtube.com/channel/UC3bR6xSghDY9_NbTK-zPk_w"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[#F0FFF0] hover:text-[#708238] transition-colors"
@@ -166,7 +166,7 @@ export default function Home() {
             </svg>
           </a>
           <a
-            href="https://facebook.com/yabamusic"
+            href="https://www.facebook.com/princeofrhumbacane/"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[#F0FFF0] hover:text-[#708238] transition-colors"
