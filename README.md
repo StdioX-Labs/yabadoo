@@ -86,6 +86,33 @@ The `.gitattributes` file is already configured to track `.wav` files.
 
 ## 🌐 Deployment
 
+### Deploy with Docker
+
+**Using Docker Compose (Recommended):**
+
+```bash
+# Build and start the application
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the application
+docker-compose down
+```
+
+The application will be available at [http://localhost:3000](http://localhost:3000)
+
+**Using Docker directly:**
+
+```bash
+# Build the image
+docker build -t yabadoo .
+
+# Run the container
+docker run -p 3000:3000 yabadoo
+```
+
 ### Deploy to Netlify
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed instructions.
