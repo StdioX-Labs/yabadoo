@@ -3,7 +3,6 @@
 import { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import Script from 'next/script';
 import { useSearchParams } from 'next/navigation';
 import { CreditCard, Phone, Shield, Check, X, Loader2, ChevronLeft, Tag } from 'lucide-react';
 
@@ -18,9 +17,12 @@ const EVENT_DATA = {
     currency: 'KES',
 };
 
+interface FormErrors {
+    [key: string]: string;
+}
+
 function EventCheckoutContent() {
     const searchParams = useSearchParams();
-    const [isPaystackLoaded, setIsPaystackLoaded] = useState(false);
 
     // Step management
     const [step, setStep] = useState(1);
@@ -47,7 +49,7 @@ function EventCheckoutContent() {
     const [promoDiscount, setPromoDiscount] = useState(0);
 
     // States
-    const [errors, setErrors] = useState<any>({});
+    const [errors, setErrors] = useState<FormErrors>({});
     const [isProcessing, setIsProcessing] = useState(false);
     const [transactionStatus, setTransactionStatus] = useState<'success' | 'error' | null>(null);
     const [errorMessage, setErrorMessage] = useState('');
@@ -124,7 +126,7 @@ function EventCheckoutContent() {
     };
 
     const validateStep = () => {
-        const newErrors: any = {};
+        const newErrors: FormErrors = {};
 
         if (step === 1) {
             if (!formData.first_name.trim()) newErrors.first_name = 'First name is required';
@@ -172,73 +174,144 @@ function EventCheckoutContent() {
         }
     };
 
-    const handlePaystackPayment = () => {
-        if (!isPaystackLoaded) {
-            alert('Payment system is still loading. Please wait a moment.');
-            return;
-        }
-
-        // @ts-ignore
-        const handler = window.PaystackPop.setup({
-            key: 'pk_live_1edd5134d2a4bafe55af11d29e3184cbcbe49125',
-            email: formData.email,
-            amount: calculateFinalTotal() * 100,
-            currency: 'KES',
-            ref: 'FUNCLUB_' + Math.floor(Math.random() * 1000000000 + 1),
-            metadata: {
-                custom_fields: [
-                    {
-                        display_name: 'Customer Name',
-                        variable_name: 'customer_name',
-                        value: `${formData.first_name} ${formData.last_name}`,
-                    },
-                    {
-                        display_name: 'Phone Number',
-                        variable_name: 'phone_number',
-                        value: `${countryCode}${formData.mobileNumber}`.replace(/\+/g, ''),
-                    },
-                    {
-                        display_name: 'Event',
-                        variable_name: 'event',
-                        value: 'The Fun Club - Gatimaiyu Forest',
-                    },
-                    {
-                        display_name: 'Tickets',
-                        variable_name: 'tickets',
-                        value: ticketQuantity.toString(),
-                    },
-                ],
-            },
-            onClose: function () {
-                setIsProcessing(false);
-                setTransactionStatus('error');
-                setErrorMessage('Payment cancelled');
-            },
-            callback: function (response: any) {
-                setIsProcessing(false);
-                setTransactionStatus('success');
-            },
-        });
-
-        handler.openIframe();
-    };
-
-    const handleMpesaPayment = () => {
+    const handlePaystackPayment = async () => {
         setIsProcessing(true);
 
-        // Simulate M-Pesa STK Push
-        setTimeout(() => {
-            const isSuccess = Math.random() < 0.9;
+        console.log('🔄 Initiating Card payment via SoldOutAfrica API');
+        console.log('💰 Amount:', calculateFinalTotal());
+        console.log('📧 Email:', formData.email);
 
-            if (isSuccess) {
+        try {
+            const payload = {
+                eventId: EVENT_DATA.id,
+                amountDisplayed: calculateSubtotal(),
+                coupon_code: promoCode,
+                channel: 'card',
+                customer: {
+                    mobile_number: `${countryCode}${formData.mobileNumber}`.replace(/\+/g, ''),
+                    email: formData.email,
+                    first_name: formData.first_name,
+                    last_name: formData.last_name,
+                },
+                tickets: [
+                    {
+                        ticketId: 1, // Adjust based on your ticket structure
+                        quantity: ticketQuantity,
+                    }
+                ],
+            };
+
+            console.log('📦 Payment payload:', payload);
+
+            const response = await fetch('/api/tickets/purchase', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            console.log('📡 API Response Status:', response.status);
+
+            const data = await response.json();
+            console.log('📨 API Response Data:', data);
+
+            if (response.ok && data.status === true) {
+                console.log('✅ Payment initiated successfully');
+                const ticketGroup = data.ticketGroup;
+                const checkoutUrl = data.checkoutUrl;
+
+                if (checkoutUrl) {
+                    console.log('🔗 Redirecting to checkout URL:', checkoutUrl);
+                    window.location.href = checkoutUrl;
+                } else {
+                    // Fallback to callback page
+                    setTimeout(() => {
+                        window.location.href = `/payments/callback?trxref=${ticketGroup}&reference=${ticketGroup}`;
+                    }, 2000);
+                }
+
+                setIsProcessing(false);
                 setTransactionStatus('success');
             } else {
+                console.error('❌ Payment initiation failed:', data.message);
                 setTransactionStatus('error');
-                setErrorMessage('M-Pesa transaction failed. Please try again.');
+                setErrorMessage(data.message || 'Payment failed. Please try again.');
+                setIsProcessing(false);
             }
-
+        } catch (error) {
+            console.error('💥 Error initiating payment:', error);
+            setTransactionStatus('error');
+            setErrorMessage('Failed to initiate payment. Please try again.');
             setIsProcessing(false);
-        }, 3000);
+        }
+    };
+
+    const handleMpesaPayment = async () => {
+        setIsProcessing(true);
+
+        console.log('🔄 Initiating M-Pesa payment via SoldOutAfrica API');
+        console.log('📱 Phone Number:', `${countryCode}${mpesaNumber}`);
+        console.log('💰 Amount:', calculateFinalTotal());
+        console.log('📧 Email:', formData.email);
+
+        try {
+            const payload = {
+                eventId: EVENT_DATA.id,
+                amountDisplayed: calculateSubtotal(),
+                coupon_code: promoCode,
+                channel: 'mpesa',
+                customer: {
+                    mobile_number: `${countryCode}${mpesaNumber}`.replace(/\+/g, ''),
+                    email: formData.email,
+                    first_name: formData.first_name,
+                    last_name: formData.last_name,
+                },
+                tickets: [
+                    {
+                        ticketId: 1, // Adjust based on your ticket structure
+                        quantity: ticketQuantity,
+                    }
+                ],
+            };
+
+            console.log('📦 Payment payload:', payload);
+
+            const response = await fetch('/api/tickets/purchase', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            console.log('📡 API Response Status:', response.status);
+
+            const data = await response.json();
+            console.log('📨 API Response Data:', data);
+
+            if (response.ok && data.status === true) {
+                console.log('✅ M-Pesa STK push initiated successfully');
+                const ticketGroup = data.ticketGroup;
+
+                // Redirect to callback page after short delay
+                setTimeout(() => {
+                    window.location.href = `/payments/callback?trxref=${ticketGroup}&reference=${ticketGroup}`;
+                }, 2000);
+
+                setTransactionStatus('success');
+            } else {
+                console.error('❌ M-Pesa initiation failed:', data.message);
+                setTransactionStatus('error');
+                setErrorMessage(data.message || 'M-Pesa transaction failed. Please try again.');
+            }
+        } catch (error) {
+            console.error('💥 Error initiating M-Pesa payment:', error);
+            setTransactionStatus('error');
+            setErrorMessage('Failed to initiate payment. Please try again.');
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     const processPayment = () => {
@@ -326,11 +399,6 @@ function EventCheckoutContent() {
 
     return (
         <>
-            <Script
-                src="https://js.paystack.co/v1/inline.js"
-                onLoad={() => setIsPaystackLoaded(true)}
-                strategy="afterInteractive"
-            />
             <div className="relative min-h-screen bg-[#0A0F0D]">
                 {/* Header */}
                 <header className="sticky top-0 left-0 right-0 z-40 bg-[#0A0F0D]/95 backdrop-blur-xl border-b border-[#708238]/20">
@@ -574,9 +642,9 @@ function EventCheckoutContent() {
                                                 </div>
                                                 <div>
                                                     <h4 className="font-bold mb-2 text-[#F0FFF0]">Card Payment</h4>
-                                                    <p className="text-sm text-[#F0FFF0]/70">
-                                                        Secure card payment via Paystack. You'll be redirected to complete payment.
-                                                    </p>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                Secure card payment via Paystack. You&apos;ll be redirected to complete payment.
+                                            </p>
                                                 </div>
                                             </div>
                                         </div>

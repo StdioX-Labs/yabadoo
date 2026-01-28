@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import Script from 'next/script';
@@ -18,12 +18,32 @@ const tracks = [
 
 export default function CheckoutPage() {
   const [isPaystackLoaded, setIsPaystackLoaded] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     firstName: '',
     lastName: '',
     phone: '',
   });
+
+  // Check if Paystack script is loaded
+  useEffect(() => {
+    const checkPaystackLoaded = () => {
+      // @ts-ignore
+      if (typeof window !== 'undefined' && window.PaystackPop) {
+        setIsPaystackLoaded(true);
+        console.log('✅ Paystack loaded successfully');
+      }
+    };
+
+    // Check immediately
+    checkPaystackLoaded();
+
+    // Check again after a short delay
+    const timer = setTimeout(checkPaystackLoaded, 1000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -33,16 +53,23 @@ export default function CheckoutPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!isPaystackLoaded) {
-      alert('Payment system is still loading. Please wait a moment.');
+    // Check if Paystack is available
+    // @ts-ignore
+    if (typeof window === 'undefined' || !window.PaystackPop) {
+      console.error('❌ Paystack not loaded');
+      alert('Payment system is still loading. Please wait a moment and try again.');
       return;
     }
 
-    // @ts-ignore - PaystackPop is loaded from script
+    setIsProcessing(true);
+
+    console.log('🔄 Initiating Paystack payment');
+
+    // @ts-ignore - PaystackPop is loaded from external script
     const handler = window.PaystackPop.setup({
-      key: 'pk_live_1edd5134d2a4bafe55af11d29e3184cbcbe49125',
+      key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || 'pk_live_1edd5134d2a4bafe55af11d29e3184cbcbe49125',
       email: formData.email,
-      amount: EP_PRICE * 100, // Amount in kobo (multiply by 100)
+      amount: EP_PRICE * 100, // Amount in kobo
       currency: 'KES',
       ref: 'WAPE_EP_' + Math.floor(Math.random() * 1000000000 + 1),
       metadata: {
@@ -65,18 +92,21 @@ export default function CheckoutPage() {
         ],
       },
       onClose: function () {
+        console.log('❌ Payment cancelled');
+        setIsProcessing(false);
         alert('Payment cancelled. You can try again anytime!');
       },
-      callback: function (response: any) {
+      callback: function (response: { reference: string }) {
+        console.log('✅ Payment successful:', response.reference);
+        setIsProcessing(false);
         alert(
           'Payment successful! Reference: ' + response.reference +
           '\n\nYour download link will be sent to ' + formData.email
         );
-        // Here you would typically verify the payment on your backend
-        // and send the download link via email
       },
     });
 
+    console.log('✅ Opening Paystack popup');
     handler.openIframe();
   };
 
@@ -84,8 +114,14 @@ export default function CheckoutPage() {
     <>
       <Script
         src="https://js.paystack.co/v1/inline.js"
-        onLoad={() => setIsPaystackLoaded(true)}
-        strategy="afterInteractive"
+        onLoad={() => {
+          setIsPaystackLoaded(true);
+          console.log('✅ Paystack script loaded via onLoad');
+        }}
+        onError={(e) => {
+          console.error('❌ Failed to load Paystack script:', e);
+        }}
+        strategy="lazyOnload"
       />
       <div className="relative w-screen min-h-screen overflow-auto bg-black">
         {/* Background */}
@@ -99,233 +135,144 @@ export default function CheckoutPage() {
           <Link href="/">
             <Image
               src="/images/logo/yaba_logo.png"
-              alt="Yaba Logo"
-              width={64}
-              height={64}
-              className="rounded-full w-16 h-16 md:w-24 md:h-24 hover:opacity-80 transition-opacity"
+              alt="YABA"
+              width={40}
+              height={40}
+              className="rounded-full hover:opacity-80 transition-opacity"
             />
           </Link>
         </div>
 
-        {/* Top Right - YABA */}
-        <div className="fixed top-6 md:top-8 right-6 md:right-12 lg:right-16 z-50">
-          <h2 className="text-[#F0FFF0] font-playfair text-2xl md:text-3xl font-bold tracking-[0.2em]" style={{ writingMode: "vertical-rl" }}>
-            YABA
-          </h2>
-        </div>
-
         {/* Main Content */}
-        <div className="relative z-10 pt-32 pb-20 px-4 md:px-8">
-          <div className="max-w-5xl mx-auto">
-            {/* Header */}
-            <div className="text-center mb-12 md:mb-16">
-              <Link
-                href="/"
-                className="inline-flex items-center gap-2 text-[#F0FFF0]/60 hover:text-[#708238] transition-colors mb-8 font-playfair text-sm tracking-[0.2em] uppercase"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                Back
-              </Link>
-              <h1 className="font-playfair text-4xl md:text-6xl font-bold mb-4 text-[#F0FFF0] tracking-tight">
+        <div className="relative z-10 flex items-center justify-center min-h-screen p-4 md:p-8">
+          <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-8 lg:gap-12">
+            {/* Left: Album Info */}
+            <div className="flex flex-col justify-center text-white">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4">
                 WAPE WAPE
               </h1>
-              <p className="text-[#F0FFF0]/60 font-playfair text-sm tracking-[0.2em] uppercase">
-                Digital Album • 2025
+              <p className="text-xl md:text-2xl text-white/80 mb-8">
+                by YABA
               </p>
+
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold mb-4">TRACKLIST</h3>
+                <div className="space-y-2">
+                  {tracks.map((track) => (
+                    <div
+                      key={track.number}
+                      className="flex items-center justify-between py-2 px-4 bg-white/5 rounded-lg hover:bg-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <span className="text-white/50 w-6">{track.number}</span>
+                        <span>{track.title}</span>
+                      </div>
+                      <span className="text-white/50">{track.duration}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="text-3xl md:text-4xl font-bold">
+                KES {EP_PRICE.toLocaleString()}
+              </div>
             </div>
 
-            {/* EP Preview & Checkout Form */}
-            <div className="grid md:grid-cols-2 gap-8 md:gap-12">
-              {/* Left: EP Preview */}
-              <div className="space-y-6">
-                {/* Album Art */}
-                <div className="relative aspect-square w-full max-w-md mx-auto">
-                  <Image
-                    src="/images/wape.PNG"
-                    alt="WAPE WAPE EP"
-                    fill
-                    className="object-cover"
-                    priority
+            {/* Right: Checkout Form */}
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 md:p-8">
+              <h2 className="text-2xl font-bold text-white mb-6">
+                Complete Your Purchase
+              </h2>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-white/80 mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-white/40 transition-colors"
+                    placeholder="your@email.com"
                   />
                 </div>
 
-                {/* Track List */}
-                <div className="border border-[#708238]/30 p-6">
-                  <h3 className="font-playfair text-lg md:text-xl font-bold mb-4 text-[#708238] tracking-[0.15em] uppercase">
-                    Tracklist
-                  </h3>
-                  <div className="space-y-3">
-                    {tracks.map((track) => (
-                      <div
-                        key={track.number}
-                        className="flex items-center justify-between text-sm border-b border-[#708238]/10 pb-2 last:border-0 last:pb-0"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-[#708238] font-playfair font-bold w-6">
-                            {String(track.number).padStart(2, '0')}
-                          </span>
-                          <span className="text-[#F0FFF0] font-playfair">
-                            {track.title}
-                          </span>
-                        </div>
-                        <span className="text-[#F0FFF0]/50 font-playfair text-xs">
-                          {track.duration}
-                        </span>
-                      </div>
-                    ))}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="firstName" className="block text-sm font-medium text-white/80 mb-2">
+                      First Name
+                    </label>
+                    <input
+                      id="firstName"
+                      type="text"
+                      name="firstName"
+                      value={formData.firstName}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-white/40 transition-colors"
+                      placeholder="John"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="lastName" className="block text-sm font-medium text-white/80 mb-2">
+                      Last Name
+                    </label>
+                    <input
+                      id="lastName"
+                      type="text"
+                      name="lastName"
+                      value={formData.lastName}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-white/40 transition-colors"
+                      placeholder="Doe"
+                    />
                   </div>
                 </div>
 
-                {/* Features */}
-                <div className="border border-[#708238]/30 p-6">
-                  <div className="space-y-2 text-sm text-[#F0FFF0]/70">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-[#708238]" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
-                      </svg>
-                      <span className="font-playfair">High-quality MP3 files</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-[#708238]" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
-                      </svg>
-                      <span className="font-playfair">Instant download</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-[#708238]" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
-                      </svg>
-                      <span className="font-playfair">Digital booklet included</span>
-                    </div>
-                  </div>
+                <div>
+                  <label htmlFor="phone" className="block text-sm font-medium text-white/80 mb-2">
+                    Phone Number
+                  </label>
+                  <input
+                    id="phone"
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-white/40 transition-colors"
+                    placeholder="+254 7XX XXX XXX"
+                  />
                 </div>
-              </div>
 
-              {/* Right: Checkout Form */}
-              <div>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Price */}
-                  <div className="border border-[#708238]/30 p-6 text-center">
-                    <p className="text-[#F0FFF0]/60 font-playfair text-sm tracking-[0.15em] uppercase mb-2">
-                      Price
-                    </p>
-                    <p className="text-4xl md:text-5xl font-bold text-[#708238] font-playfair">
-                      KES {EP_PRICE.toLocaleString()}
-                    </p>
-                  </div>
+                <button
+                  type="submit"
+                  disabled={isProcessing}
+                  className="w-full py-4 bg-white text-black font-bold rounded-lg hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? 'Processing...' : `Pay KES ${EP_PRICE.toLocaleString()}`}
+                </button>
 
-                  {/* Contact Information */}
-                  <div className="space-y-4">
-                    <h3 className="font-playfair text-lg font-bold text-[#708238] tracking-[0.15em] uppercase">
-                      Your Details
-                    </h3>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="firstName" className="block text-xs font-playfair text-[#F0FFF0]/60 mb-2 tracking-[0.1em] uppercase">
-                          First Name
-                        </label>
-                        <input
-                          type="text"
-                          id="firstName"
-                          name="firstName"
-                          required
-                          value={formData.firstName}
-                          onChange={handleInputChange}
-                          className="w-full px-4 py-3 bg-transparent border border-[#708238]/30 focus:border-[#708238] text-[#F0FFF0] placeholder-[#F0FFF0]/30 font-playfair transition-colors outline-none"
-                          placeholder="John"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="lastName" className="block text-xs font-playfair text-[#F0FFF0]/60 mb-2 tracking-[0.1em] uppercase">
-                          Last Name
-                        </label>
-                        <input
-                          type="text"
-                          id="lastName"
-                          name="lastName"
-                          required
-                          value={formData.lastName}
-                          onChange={handleInputChange}
-                          className="w-full px-4 py-3 bg-transparent border border-[#708238]/30 focus:border-[#708238] text-[#F0FFF0] placeholder-[#F0FFF0]/30 font-playfair transition-colors outline-none"
-                          placeholder="Doe"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label htmlFor="email" className="block text-xs font-playfair text-[#F0FFF0]/60 mb-2 tracking-[0.1em] uppercase">
-                        Email Address
-                      </label>
-                      <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        required
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 bg-transparent border border-[#708238]/30 focus:border-[#708238] text-[#F0FFF0] placeholder-[#F0FFF0]/30 font-playfair transition-colors outline-none"
-                        placeholder="john@example.com"
-                      />
-                      <p className="text-xs text-[#F0FFF0]/40 mt-1 font-playfair">
-                        Download link will be sent here
-                      </p>
-                    </div>
-
-                    <div>
-                      <label htmlFor="phone" className="block text-xs font-playfair text-[#F0FFF0]/60 mb-2 tracking-[0.1em] uppercase">
-                        Phone Number
-                      </label>
-                      <input
-                        type="tel"
-                        id="phone"
-                        name="phone"
-                        required
-                        value={formData.phone}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 bg-transparent border border-[#708238]/30 focus:border-[#708238] text-[#F0FFF0] placeholder-[#F0FFF0]/30 font-playfair transition-colors outline-none"
-                        placeholder="+254 712 345 678"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Payment Method */}
-                  <div className="border border-[#708238]/30 p-4">
-                    <p className="text-xs text-[#F0FFF0]/60 font-playfair tracking-[0.1em] uppercase mb-2">
-                      Payment via Paystack
-                    </p>
-                    <p className="text-xs text-[#F0FFF0]/50 font-playfair">
-                      M-Pesa • Card • Bank Transfer
-                    </p>
-                  </div>
-
-                  {/* Submit Button */}
-                  <button
-                    type="submit"
-                    className="w-full py-4 border-2 border-[#F0FFF0] text-[#F0FFF0] font-playfair text-sm tracking-[0.2em] uppercase hover:bg-[#F0FFF0] hover:text-black transition-all duration-300"
-                  >
-                    Complete Payment
-                  </button>
-
-                  <p className="text-xs text-center text-[#F0FFF0]/40 font-playfair">
-                    Secure payment powered by Paystack
-                  </p>
-                </form>
-              </div>
+                <p className="text-xs text-white/50 text-center">
+                  Secure payment powered by Paystack
+                </p>
+              </form>
             </div>
           </div>
         </div>
 
-        {/* Copyright Notice - Bottom */}
-        <div className="relative z-10 pb-8 text-center text-[#F0FFF0]/50 text-xs font-playfair">
-          Powered by{" "}
+        {/* Bottom Right - Credits */}
+        <div className="fixed bottom-4 md:bottom-8 right-6 md:right-12 lg:right-16 z-50 text-white/50 text-sm">
           <a
             href="https://soldoutafrica.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-[#708238] transition-colors underline"
+            className="hover:text-white transition-colors"
           >
             SoldOutAfrica
           </a>
@@ -334,4 +281,3 @@ export default function CheckoutPage() {
     </>
   );
 }
-

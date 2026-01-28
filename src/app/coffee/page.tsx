@@ -99,7 +99,7 @@ export default function CoffeePage() {
           {
             display_name: 'Product',
             variable_name: 'product',
-            value: 'Buy Yaba a Coffee',
+            value: 'Buy Me Coffee',
           },
         ],
       },
@@ -176,7 +176,7 @@ export default function CoffeePage() {
                 <Coffee className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-[#0A0F0D]" />
               </motion.div>
               <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 leading-[1.1] tracking-tight px-4">
-                {['Buy', 'Yaba', 'a', 'Coffee'].map((word, i) => (
+                {['Buy', 'Me', 'Coffee'].map((word, i) => (
                   <motion.span
                     key={i}
                     initial={{ y: 40, opacity: 0 }}
