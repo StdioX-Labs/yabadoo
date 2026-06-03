@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Calendar,
   MapPin,
@@ -15,8 +15,18 @@ import {
   AlertCircle,
   Minus,
   Plus,
-  X,
+  Ticket,
 } from 'lucide-react';
+
+interface TicketType {
+  id: number;
+  ticketName: string;
+  ticketPrice: number;
+  quantityAvailable: number;
+  soldQuantity: number;
+  isActive: boolean;
+  isSoldOut: boolean;
+}
 
 interface Event {
   id: number;
@@ -26,15 +36,7 @@ interface Event {
   eventLocation: string;
   eventStartDate: string;
   eventEndDate: string;
-  tickets: Array<{
-    id: number;
-    ticketName: string;
-    ticketPrice: number;
-    quantityAvailable: number;
-    soldQuantity: number;
-    isActive: boolean;
-    isSoldOut: boolean;
-  }>;
+  tickets: TicketType[];
   companyName: string;
   category: string;
   date: string;
@@ -42,6 +44,60 @@ interface Event {
   price: number;
   slug: string;
   currency: string;
+}
+
+function TicketStepper({
+  ticket,
+  quantity,
+  currency,
+  onIncrease,
+  onDecrease,
+}: {
+  ticket: TicketType;
+  quantity: number;
+  currency: string;
+  onIncrease: () => void;
+  onDecrease: () => void;
+}) {
+  const remaining = ticket.quantityAvailable - ticket.soldQuantity;
+  const atMax = quantity >= remaining;
+
+  return (
+    <div className={`rounded-xl border transition-all duration-200 ${quantity > 0 ? 'border-[#708238] bg-[#708238]/5' : 'border-white/10 bg-white/5'}`}>
+      <div className="p-4 flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="font-semibold text-[#F0FFF0] truncate">{ticket.ticketName}</p>
+          <p className="text-[#708238] font-bold mt-0.5">
+            {currency} {ticket.ticketPrice.toLocaleString()}
+          </p>
+          {remaining < 15 && (
+            <p className="text-xs text-amber-400 mt-1">{remaining} left</p>
+          )}
+          {ticket.isSoldOut && (
+            <p className="text-xs text-red-400 mt-1">Sold out</p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={onDecrease}
+            disabled={quantity === 0}
+            className="w-9 h-9 rounded-full border border-white/20 flex items-center justify-center hover:border-[#708238] hover:bg-[#708238]/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+          <span className="w-8 text-center font-bold text-lg select-none">{quantity}</span>
+          <button
+            onClick={onIncrease}
+            disabled={ticket.isSoldOut || atMax}
+            className="w-9 h-9 rounded-full border border-white/20 flex items-center justify-center hover:border-[#708238] hover:bg-[#708238]/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function EventPage() {
@@ -52,326 +108,344 @@ export default function EventPage() {
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const [showTicketModal, setShowTicketModal] = useState(false);
   const [selectedTickets, setSelectedTickets] = useState<Record<number, number>>({});
 
   useEffect(() => {
     const fetchEvent = async () => {
       try {
         setLoading(true);
-        // The slug is actually the event ID passed from the listing page
         const response = await fetch(`/api/events/${slug}?eventId=${slug}`);
         const data = await response.json();
-
         if (data.success) {
           setEvent(data.event);
         } else {
           setError('Event not found');
         }
-      } catch (err) {
-        console.error('Error fetching event:', err);
+      } catch {
         setError('Failed to load event');
       } finally {
         setLoading(false);
       }
     };
-
-    if (slug) {
-      fetchEvent();
-    }
+    if (slug) fetchEvent();
   }, [slug]);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrollTop = window.scrollY;
-      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-      const scrollPercent = (scrollTop / docHeight) * 100;
-      setScrollProgress(scrollPercent);
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-
-  const getTotalTickets = () => {
-    return Object.values(selectedTickets).reduce((sum, qty) => sum + qty, 0);
-  };
+  const getTotalTickets = () => Object.values(selectedTickets).reduce((s, q) => s + q, 0);
 
   const getTotalPrice = () => {
     if (!event) return 0;
-    return Object.entries(selectedTickets).reduce((total, [ticketId, quantity]) => {
-      const ticket = event.tickets.find(t => t.id === parseInt(ticketId));
-      return total + (ticket?.ticketPrice || 0) * quantity;
+    return Object.entries(selectedTickets).reduce((total, [id, qty]) => {
+      const t = event.tickets.find(t => t.id === parseInt(id));
+      return total + (t?.ticketPrice || 0) * qty;
     }, 0);
   };
 
-  const updateTicketQuantity = (ticketId: number, change: number) => {
+  const updateQty = (ticketId: number, delta: number) => {
     setSelectedTickets(prev => {
-      const currentQty = prev[ticketId] || 0;
-      const newQty = Math.max(0, currentQty + change);
-
-      if (newQty === 0) {
-        // Remove ticket from selection
+      const next = Math.max(0, (prev[ticketId] || 0) + delta);
+      if (next === 0) {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { [ticketId]: removed, ...rest } = prev;
+        const { [ticketId]: _, ...rest } = prev;
         return rest;
       }
-
-      return { ...prev, [ticketId]: newQty };
+      return { ...prev, [ticketId]: next };
     });
   };
 
-  const handleProceedToCheckout = () => {
-    if (getTotalTickets() === 0) return;
-
-    const ticketData = Object.entries(selectedTickets)
-      .map(([ticketId, quantity]) => {
-        const ticket = event?.tickets.find(t => t.id === parseInt(ticketId));
-        return {
-          ticketId: parseInt(ticketId),
-          ticketName: ticket?.ticketName,
-          quantity,
-          price: ticket?.ticketPrice,
-        };
-      });
-
-    const queryParams = new URLSearchParams({
-      eventId: event?.id.toString() || '',
+  const handleCheckout = () => {
+    if (getTotalTickets() === 0 || !event) return;
+    const ticketData = Object.entries(selectedTickets).map(([id, qty]) => {
+      const t = event.tickets.find(t => t.id === parseInt(id));
+      return { ticketId: parseInt(id), ticketName: t?.ticketName, quantity: qty, price: t?.ticketPrice };
+    });
+    const params = new URLSearchParams({
+      eventId: event.id.toString(),
       tickets: JSON.stringify(ticketData),
     });
+    router.push(`/events/${slug}/checkout?${params.toString()}`);
+  };
 
-    router.push(`/events/${slug}/checkout?${queryParams.toString()}`);
+  const handleShare = async () => {
+    if (!event) return;
+    const url = window.location.href;
+    if (navigator.share) {
+      await navigator.share({ title: event.eventName, url }).catch(() => {});
+    } else {
+      await navigator.clipboard.writeText(url).catch(() => {});
+    }
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0A0F0D] flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 text-[#708238] animate-spin mx-auto mb-4" />
-          <p className="text-white/70">Loading event...</p>
-        </div>
+        <Loader2 className="w-10 h-10 text-[#708238] animate-spin" />
       </div>
     );
   }
 
   if (error || !event) {
     return (
-      <div className="min-h-screen bg-[#0A0F0D] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0A0F0D] flex items-center justify-center px-4">
         <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-white mb-2">Event Not Found</h1>
-          <p className="text-white/70 mb-6">{error || 'The event you are looking for does not exist.'}</p>
-          <Link
-            href="/events"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-[#708238] text-[#0A0F0D] rounded-lg hover:bg-[#F0FFF0] transition-all"
-          >
-            <ChevronLeft size={20} />
-            Back to Events
+          <p className="text-white/60 mb-6">{error}</p>
+          <Link href="/events" className="inline-flex items-center gap-2 px-6 py-3 bg-[#708238] text-[#0A0F0D] rounded-xl font-bold hover:bg-[#F0FFF0] transition-all">
+            <ChevronLeft size={18} /> Back to Events
           </Link>
         </div>
       </div>
     );
   }
 
+  const totalTickets = getTotalTickets();
+  const totalPrice = getTotalPrice();
+  const isSingleTicketType = event.tickets.length === 1;
+  const singleTicket = isSingleTicketType ? event.tickets[0] : null;
+
   return (
     <div className="relative bg-[#0A0F0D] text-[#F0FFF0] min-h-screen">
-      {/* Scroll Progress */}
-      <div className="fixed top-0 left-0 right-0 h-1 bg-[#1A2421] z-[100]">
-        <div
-          className="h-full bg-gradient-to-r from-[#708238] to-[#F0FFF0] transition-all duration-300"
-          style={{ width: `${scrollProgress}%` }}
-        />
-      </div>
-
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-[#0A0F0D]/95 backdrop-blur-xl border-b border-white/10">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+      {/* Fixed Header */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-[#0A0F0D]/80 backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <Link
             href="/events"
-            className="flex items-center justify-center w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 transition-all"
+            className="flex items-center gap-2 text-sm text-white/70 hover:text-[#F0FFF0] transition-colors group"
           >
-            <ChevronLeft size={22} />
+            <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-all">
+              <ChevronLeft size={18} />
+            </div>
+            <span className="hidden sm:inline">Events</span>
           </Link>
 
-          <div className="absolute left-1/2 transform -translate-x-1/2">
-            <Image src="/images/logo/yaba_logo.png" alt="YABA" width={48} height={48} className="rounded-full" />
-          </div>
+          <Image src="/images/logo/yaba_logo.png" alt="YABA" width={40} height={40} className="rounded-full" />
 
-          <button className="flex items-center justify-center w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 transition-all">
-            <Share2 size={20} />
+          <button
+            onClick={handleShare}
+            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all"
+            aria-label="Share event"
+          >
+            <Share2 size={16} />
           </button>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="relative pt-24 pb-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="relative aspect-[16/9] rounded-2xl overflow-hidden mb-8"
-            >
-              <Image
-                src={event.eventPosterUrl}
-                alt={event.eventName}
-                fill
-                className="object-cover"
-                priority
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-            </motion.div>
+      {/* Hero */}
+      <div className="relative h-[55vh] min-h-[340px] max-h-[520px] overflow-hidden">
+        <Image
+          src={event.eventPosterUrl}
+          alt={event.eventName}
+          fill
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0A0F0D] via-[#0A0F0D]/40 to-transparent" />
 
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-              <div className="mb-4">
-                <span className="inline-block px-4 py-1.5 text-xs uppercase tracking-widest rounded-full bg-[#708238]/20 text-[#708238] border border-[#708238]/40">
-                  {event.category}
-                </span>
-              </div>
+        {/* Category badge */}
+        <div className="absolute top-20 left-4 sm:left-6">
+          <span className="px-3 py-1 text-xs font-semibold uppercase tracking-widest bg-[#708238] text-[#0A0F0D] rounded-full">
+            {event.category}
+          </span>
+        </div>
+      </div>
 
-              <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">{event.eventName}</h1>
+      {/* Main content */}
+      <div className="max-w-6xl mx-auto px-4 pb-32 lg:pb-12">
+        <div className="lg:grid lg:grid-cols-[1fr_380px] lg:gap-10 lg:-mt-24 relative">
 
-              <div className="flex flex-wrap gap-4 mb-6">
-                <div className="flex items-center gap-2 text-white/80">
-                  <Calendar size={20} className="text-[#708238]" />
-                  <span>{event.date} • {event.time}</span>
+          {/* Left: Event Info */}
+          <div className="py-6 lg:py-0">
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-black leading-tight tracking-tight mb-6">
+                {event.eventName}
+              </h1>
+
+              <div className="flex flex-wrap gap-x-5 gap-y-2 mb-8 text-sm text-white/70">
+                <div className="flex items-center gap-2">
+                  <Calendar size={15} className="text-[#708238]" />
+                  <span>{event.date} · {event.time}</span>
                 </div>
-                <div className="flex items-center gap-2 text-white/80">
-                  <MapPin size={20} className="text-[#708238]" />
+                <div className="flex items-center gap-2">
+                  <MapPin size={15} className="text-[#708238]" />
                   <span>{event.eventLocation}</span>
                 </div>
-                <div className="flex items-center gap-2 text-white/80">
-                  <Users size={20} className="text-[#708238]" />
+                <div className="flex items-center gap-2">
+                  <Users size={15} className="text-[#708238]" />
                   <span>By {event.companyName}</span>
                 </div>
               </div>
 
-              <button
-                onClick={() => setShowTicketModal(true)}
-                className="w-full sm:w-auto px-8 py-4 bg-[#708238] text-[#0A0F0D] rounded-lg font-bold text-lg hover:bg-[#F0FFF0] transition-all shadow-lg"
-              >
-                Get Tickets - From {event.currency} {event.price.toLocaleString()}
-              </button>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* Description Section */}
-      <section className="py-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold mb-6">About This Event</h2>
-            <div className="prose prose-invert max-w-none">
-              <p className="text-white/80 leading-relaxed whitespace-pre-wrap">
-                {event.eventDescription}
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Ticket Modal */}
-      <AnimatePresence>
-        {showTicketModal && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="relative w-full max-w-2xl bg-[#0D1311] rounded-2xl border-2 border-[#708238] overflow-hidden"
-            >
-              <button
-                onClick={() => setShowTicketModal(false)}
-                className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-[#708238] transition-all z-10"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              <div className="p-6">
-                <h3 className="text-2xl font-bold mb-6">Select Tickets</h3>
-
-                <div className="space-y-4 mb-6">
-                  {event.tickets.map((ticket) => (
-                    <div
-                      key={ticket.id}
-                      className="p-6 border border-[#708238]/30 rounded-lg hover:border-[#708238] transition-all"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <h4 className="font-bold text-lg mb-2">{ticket.ticketName}</h4>
-                          <div className="flex items-baseline gap-2 mb-2">
-                            <p className="text-2xl font-bold text-[#708238]">
-                              {event.currency} {ticket.ticketPrice.toLocaleString()}
-                            </p>
-                          </div>
-                          {(ticket.quantityAvailable - ticket.soldQuantity) < 15 && (
-                            <p className="text-sm text-white/60">
-                              {ticket.quantityAvailable - ticket.soldQuantity} available
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex items-center">
-                          <button
-                            onClick={() => updateTicketQuantity(ticket.id, -1)}
-                            disabled={!selectedTickets[ticket.id]}
-                            className="w-10 h-10 flex items-center justify-center border border-[#708238]/30 hover:bg-[#708238]/20 rounded-l-lg transition-all disabled:opacity-50"
-                          >
-                            <Minus className="w-4 h-4" />
-                          </button>
-                          <div className="w-12 h-10 flex items-center justify-center border-t border-b border-[#708238]/30 font-bold">
-                            {selectedTickets[ticket.id] || 0}
-                          </div>
-                          <button
-                            onClick={() => updateTicketQuantity(ticket.id, 1)}
-                            disabled={ticket.isSoldOut || (selectedTickets[ticket.id] || 0) >= ticket.quantityAvailable}
-                            className="w-10 h-10 flex items-center justify-center border border-[#708238]/30 hover:bg-[#708238]/20 rounded-r-lg transition-all disabled:opacity-50"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t border-[#708238]/30 pt-6 mb-6">
-                  <div className="flex justify-between mb-2">
-                    <span className="font-medium">Total Tickets</span>
-                    <span className="font-medium">{getTotalTickets()}</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-xl">
-                    <span>TOTAL</span>
-                    <span className="text-[#708238]">
-                      {event.currency} {getTotalPrice().toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => setShowTicketModal(false)}
-                    className="flex-1 px-6 py-3 rounded-lg border border-[#708238]/30 hover:bg-[#708238]/10 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleProceedToCheckout}
-                    disabled={getTotalTickets() === 0}
-                    className="flex-1 px-8 py-3 bg-[#708238] text-[#0A0F0D] font-bold rounded-lg hover:bg-[#F0FFF0] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Continue
-                  </button>
-                </div>
+              {/* Description */}
+              <div className="border-t border-white/10 pt-6">
+                <h2 className="text-lg font-bold mb-3 text-[#708238] uppercase tracking-widest text-xs">About</h2>
+                <p className="text-white/75 leading-relaxed whitespace-pre-wrap text-[15px]">
+                  {event.eventDescription}
+                </p>
               </div>
             </motion.div>
           </div>
+
+          {/* Right: Sticky Ticket Panel */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="hidden lg:block"
+          >
+            <div className="sticky top-20">
+              <TicketPanel
+                event={event}
+                selectedTickets={selectedTickets}
+                totalTickets={totalTickets}
+                totalPrice={totalPrice}
+                isSingleTicketType={isSingleTicketType}
+                singleTicket={singleTicket}
+                onUpdate={updateQty}
+                onCheckout={handleCheckout}
+              />
+            </div>
+          </motion.div>
+        </div>
+      </div>
+
+      {/* Mobile: Ticket section (above sticky bar) */}
+      <div className="lg:hidden px-4 pb-4">
+        <div className="border-t border-white/10 pt-6">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-[#708238] mb-4 flex items-center gap-2">
+            <Ticket size={14} /> Tickets
+          </h2>
+          {isSingleTicketType && singleTicket ? (
+            <TicketStepper
+              ticket={singleTicket}
+              quantity={selectedTickets[singleTicket.id] || 0}
+              currency={event.currency}
+              onIncrease={() => updateQty(singleTicket.id, 1)}
+              onDecrease={() => updateQty(singleTicket.id, -1)}
+            />
+          ) : (
+            <div className="space-y-3">
+              {event.tickets.map(t => (
+                <TicketStepper
+                  key={t.id}
+                  ticket={t}
+                  quantity={selectedTickets[t.id] || 0}
+                  currency={event.currency}
+                  onIncrease={() => updateQty(t.id, 1)}
+                  onDecrease={() => updateQty(t.id, -1)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile sticky bottom bar */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0A0F0D]/95 backdrop-blur-xl border-t border-white/10 px-4 py-4">
+        {totalTickets > 0 ? (
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <p className="text-xs text-white/50">{totalTickets} ticket{totalTickets > 1 ? 's' : ''}</p>
+              <p className="font-bold text-[#708238]">{event.currency} {totalPrice.toLocaleString()}</p>
+            </div>
+            <button
+              onClick={handleCheckout}
+              className="flex-1 py-3.5 bg-[#708238] text-[#0A0F0D] font-bold rounded-xl hover:bg-[#F0FFF0] transition-all text-sm uppercase tracking-wide"
+            >
+              Get Tickets
+            </button>
+          </div>
+        ) : (
+          <p className="text-center text-sm text-white/40">
+            From {event.currency} {event.price.toLocaleString()} · Select tickets above
+          </p>
         )}
-      </AnimatePresence>
+      </div>
     </div>
   );
 }
 
+function TicketPanel({
+  event,
+  selectedTickets,
+  totalTickets,
+  totalPrice,
+  isSingleTicketType,
+  singleTicket,
+  onUpdate,
+  onCheckout,
+}: {
+  event: Event;
+  selectedTickets: Record<number, number>;
+  totalTickets: number;
+  totalPrice: number;
+  isSingleTicketType: boolean;
+  singleTicket: TicketType | null;
+  onUpdate: (id: number, delta: number) => void;
+  onCheckout: () => void;
+}) {
+  return (
+    <div className="bg-[#0D1311] border border-white/10 rounded-2xl overflow-hidden">
+      {/* Panel header */}
+      <div className="px-5 py-4 border-b border-white/10">
+        <p className="text-xs font-bold uppercase tracking-widest text-[#708238] flex items-center gap-2">
+          <Ticket size={13} /> Tickets
+        </p>
+        <div className="mt-2 flex items-center gap-3 text-xs text-white/50">
+          <span className="flex items-center gap-1"><Calendar size={11} /> {event.date}</span>
+          <span>·</span>
+          <span className="flex items-center gap-1"><MapPin size={11} /> {event.eventLocation}</span>
+        </div>
+      </div>
+
+      {/* Ticket list */}
+      <div className="p-4 space-y-3">
+        {isSingleTicketType && singleTicket ? (
+          <TicketStepper
+            ticket={singleTicket}
+            quantity={selectedTickets[singleTicket.id] || 0}
+            currency={event.currency}
+            onIncrease={() => onUpdate(singleTicket.id, 1)}
+            onDecrease={() => onUpdate(singleTicket.id, -1)}
+          />
+        ) : (
+          event.tickets.map(t => (
+            <TicketStepper
+              key={t.id}
+              ticket={t}
+              quantity={selectedTickets[t.id] || 0}
+              currency={event.currency}
+              onIncrease={() => onUpdate(t.id, 1)}
+              onDecrease={() => onUpdate(t.id, -1)}
+            />
+          ))
+        )}
+      </div>
+
+      {/* Total + CTA */}
+      <div className="px-5 pb-5 space-y-4">
+        {totalTickets > 0 && (
+          <div className="flex justify-between items-baseline border-t border-white/10 pt-4">
+            <span className="text-sm text-white/60">{totalTickets} ticket{totalTickets > 1 ? 's' : ''}</span>
+            <span className="font-black text-xl text-[#708238]">
+              {event.currency} {totalPrice.toLocaleString()}
+            </span>
+          </div>
+        )}
+
+        <button
+          onClick={onCheckout}
+          disabled={totalTickets === 0}
+          className="w-full py-4 bg-[#708238] text-[#0A0F0D] font-bold rounded-xl hover:bg-[#F0FFF0] transition-all disabled:opacity-30 disabled:cursor-not-allowed text-sm uppercase tracking-wide"
+        >
+          {totalTickets === 0
+            ? `From ${event.currency} ${event.price.toLocaleString()}`
+            : 'Get Tickets →'}
+        </button>
+
+        <p className="text-center text-xs text-white/30">
+          Powered by SoldOutAfrica · Non-refundable
+        </p>
+      </div>
+    </div>
+  );
+}
