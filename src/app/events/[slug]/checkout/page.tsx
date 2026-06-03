@@ -135,18 +135,37 @@ function EventCheckoutContent() {
         setErrors({ ...errors, mpesaNumber: '' });
     };
 
-    const applyPromoCode = () => {
+    const applyPromoCode = async () => {
         if (!promoCode.trim()) {
             setErrors({ ...errors, promoCode: 'Please enter a promo code' });
             return;
         }
 
-        if (promoCode.toUpperCase() === 'YABA10') {
-            setPromoCodeApplied(true);
-            setPromoDiscount(10);
-            setErrors({ ...errors, promoCode: '' });
-        } else {
-            setErrors({ ...errors, promoCode: 'Invalid promo code' });
+        try {
+            const response = await fetch(`/api/promocodes/validate/${promoCode}`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            const resData = await response.json();
+
+            if (response.ok && resData.status && resData.data?.isValid) {
+                const { discountType, discountValue } = resData.data;
+                if (discountType === 'PERCENTAGE') {
+                    setPromoCodeApplied(true);
+                    setPromoDiscount(discountValue);
+                } else {
+                    const discountPct = (discountValue / calculateSubtotal()) * 100;
+                    setPromoCodeApplied(true);
+                    setPromoDiscount(discountPct);
+                }
+                setErrors({ ...errors, promoCode: '' });
+            } else {
+                setPromoCodeApplied(false);
+                setPromoDiscount(0);
+                setErrors({ ...errors, promoCode: 'Invalid promo code' });
+            }
+        } catch {
+            setErrors({ ...errors, promoCode: 'Failed to validate promo code' });
         }
     };
 
@@ -205,71 +224,54 @@ function EventCheckoutContent() {
         }
     };
 
+    const buildPayload = (channel: 'mpesa' | 'card') => {
+        const mobileNumber = channel === 'mpesa' ? mpesaNumber : formData.mobileNumber;
+        const customer = {
+            mobile_number: `${countryCode}${mobileNumber}`.replace(/\+/g, ''),
+            email: formData.email,
+            first_name: formData.first_name,
+            last_name: formData.last_name,
+        };
+        return {
+            eventId: eventData?.id,
+            amountDisplayed: calculateSubtotal(),
+            coupon_code: promoCode,
+            channel,
+            customer,
+            customers: [customer],
+            tickets: ticketsData.map((ticket) => ({
+                ticketId: ticket.ticketId,
+                quantity: ticket.quantity,
+            })),
+        };
+    };
+
     const handlePaystackPayment = async () => {
-        setIsProcessing(true);
-
-        console.log('🔄 Initiating Card payment via SoldOutAfrica API');
-        console.log('💰 Amount:', calculateFinalTotal());
-        console.log('📧 Email:', formData.email);
-
         try {
-            const payload = {
-                eventId: eventData?.id,
-                amountDisplayed: calculateSubtotal(),
-                coupon_code: promoCode,
-                channel: 'card',
-                customer: {
-                    mobile_number: `${countryCode}${formData.mobileNumber}`.replace(/\+/g, ''),
-                    email: formData.email,
-                    first_name: formData.first_name,
-                    last_name: formData.last_name,
-                },
-                tickets: ticketsData.map((ticket) => ({
-                    ticketId: ticket.ticketId,
-                    quantity: ticket.quantity,
-                })),
-            };
-
-            console.log('📦 Payment payload:', payload);
-
+            const payload = buildPayload('card');
             const response = await fetch('/api/tickets/purchase', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
-
-            console.log('📡 API Response Status:', response.status);
-
             const data = await response.json();
-            console.log('📨 API Response Data:', data);
 
             if (response.ok && data.status === true) {
-                console.log('✅ Payment initiated successfully');
-                const ticketGroup = data.ticketGroup;
-                const checkoutUrl = data.checkoutUrl;
-
-                if (checkoutUrl) {
-                    console.log('🔗 Redirecting to checkout URL:', checkoutUrl);
-                    window.location.href = checkoutUrl;
+                if (data.checkoutUrl) {
+                    window.location.href = data.checkoutUrl;
                 } else {
-                    // Fallback to callback page
                     setTimeout(() => {
-                        window.location.href = `/payments/callback?trxref=${ticketGroup}&reference=${ticketGroup}`;
+                        window.location.href = `/payments/callback?trxref=${data.ticketGroup}&reference=${data.ticketGroup}`;
                     }, 2000);
+                    setTransactionStatus('success');
+                    setIsProcessing(false);
                 }
-
-                setIsProcessing(false);
-                setTransactionStatus('success');
             } else {
-                console.error('❌ Payment initiation failed:', data.message);
                 setTransactionStatus('error');
                 setErrorMessage(data.message || 'Payment failed. Please try again.');
                 setIsProcessing(false);
             }
-        } catch (error) {
-            console.error('💥 Error initiating payment:', error);
+        } catch {
             setTransactionStatus('error');
             setErrorMessage('Failed to initiate payment. Please try again.');
             setIsProcessing(false);
@@ -277,63 +279,28 @@ function EventCheckoutContent() {
     };
 
     const handleMpesaPayment = async () => {
-        setIsProcessing(true);
-
-        console.log('🔄 Initiating M-Pesa payment via SoldOutAfrica API');
-        console.log('📱 Phone Number:', `${countryCode}${mpesaNumber}`);
-        console.log('💰 Amount:', calculateFinalTotal());
-        console.log('📧 Email:', formData.email);
-
         try {
-            const payload = {
-                eventId: eventData?.id,
-                amountDisplayed: calculateSubtotal(),
-                coupon_code: promoCode,
-                channel: 'mpesa',
-                customer: {
-                    mobile_number: `${countryCode}${mpesaNumber}`.replace(/\+/g, ''),
-                    email: formData.email,
-                    first_name: formData.first_name,
-                    last_name: formData.last_name,
-                },
-                tickets: ticketsData.map((ticket) => ({
-                    ticketId: ticket.ticketId,
-                    quantity: ticket.quantity,
-                })),
-            };
-
-            console.log('📦 Payment payload:', payload);
-
+            const payload = buildPayload('mpesa');
             const response = await fetch('/api/tickets/purchase', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
-
-            console.log('📡 API Response Status:', response.status);
-
             const data = await response.json();
-            console.log('📨 API Response Data:', data);
 
             if (response.ok && data.status === true) {
-                console.log('✅ M-Pesa STK push initiated successfully');
                 const ticketGroup = data.ticketGroup;
-
-                // Redirect to callback page after short delay
+                const amount = data.amountCharged || calculateFinalTotal();
+                const currency = eventData?.currency || 'KES';
                 setTimeout(() => {
-                    window.location.href = `/payments/callback?trxref=${ticketGroup}&reference=${ticketGroup}`;
+                    window.location.href = `/payments/callback?trxref=${ticketGroup}&reference=${ticketGroup}&amount=${amount}&currency=${encodeURIComponent(currency)}`;
                 }, 2000);
-
                 setTransactionStatus('success');
             } else {
-                console.error('❌ M-Pesa initiation failed:', data.message);
                 setTransactionStatus('error');
                 setErrorMessage(data.message || 'M-Pesa transaction failed. Please try again.');
             }
-        } catch (error) {
-            console.error('💥 Error initiating M-Pesa payment:', error);
+        } catch {
             setTransactionStatus('error');
             setErrorMessage('Failed to initiate payment. Please try again.');
         } finally {
@@ -343,7 +310,6 @@ function EventCheckoutContent() {
 
     const processPayment = () => {
         setIsProcessing(true);
-
         if (paymentMethod === 'mpesa') {
             handleMpesaPayment();
         } else {
